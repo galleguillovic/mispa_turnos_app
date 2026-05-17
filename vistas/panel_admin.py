@@ -1,3 +1,4 @@
+#panel_admin.py
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageDraw
@@ -15,11 +16,10 @@ class PanelAdmin(tk.Toplevel):
         self.configure(bg="#D68092")
         self.protocol("WM_DELETE_WINDOW", lambda: self.master.destroy())
 
-        ancho = 1200
-        alto = 700
+        ancho, alto = 1200, 700
         self.update_idletasks()
         x = (self.winfo_screenwidth() // 2) - (ancho // 2)
-        y = (self.winfo_screenheight() // 2) - (alto // 2)
+        y = max(0, (self.winfo_screenheight() // 2) - (alto // 2) - 40)
         self.geometry(f"{ancho}x{alto}+{x}+{y}")
 
         self.menu_activo = "Inicio"
@@ -231,17 +231,14 @@ class PanelAdmin(tk.Toplevel):
         self.master.destroy()
 
     def _mostrar_inicio(self):
-        # ── Frame principal dividido en centro y derecha ──
         frame_centro = tk.Frame(self.area_contenido, bg="#F9F0F2")
         frame_centro.pack(side="left", fill="both", expand=True,
                           padx=30, pady=20)
 
-        # Panel derecho con scroll
         frame_derecha = tk.Frame(self.area_contenido, bg="white", width=320)
         frame_derecha.pack(side="right", fill="y")
         frame_derecha.pack_propagate(False)
 
-        # Centro: título y calendario
         tk.Label(
             frame_centro,
             text="Vista de Turnos",
@@ -273,7 +270,6 @@ class PanelAdmin(tk.Toplevel):
         cal.pack(anchor="w", fill="both", expand=True)
         self._marcar_dias_con_turnos(cal)
 
-        # Mostrar turnos del día seleccionado
         self._frame_dia = tk.Frame(frame_centro, bg="#F9F0F2")
         self._frame_dia.pack(fill="x", pady=(15, 0))
 
@@ -281,7 +277,6 @@ class PanelAdmin(tk.Toplevel):
                  lambda e: self._mostrar_turnos_dia(
                      cal.selection_get(), self._frame_dia))
 
-        # Derecha: título
         tk.Label(
             frame_derecha,
             text="Turnos Programados",
@@ -289,7 +284,6 @@ class PanelAdmin(tk.Toplevel):
             font=("Poppins ExtraBold", 14)
         ).pack(anchor="w", padx=20, pady=(20, 10))
 
-        # Scroll para las tarjetas
         canvas_scroll = tk.Canvas(frame_derecha, bg="white",
                                   highlightthickness=0)
         scrollbar = ttk.Scrollbar(frame_derecha, orient="vertical",
@@ -349,14 +343,16 @@ class PanelAdmin(tk.Toplevel):
                        p_emp.nombre AS emp_nombre,
                        p_emp.apellido AS emp_apellido,
                        u_emp.foto AS emp_foto,
-                       s.nombre AS servicio
+                       GROUP_CONCAT(s.nombre SEPARATOR ', ') AS servicios
                 FROM turnos t
                 JOIN empleados e ON t.id_empleado = e.id_empleado
                 JOIN personas p_emp ON e.id_persona = p_emp.id_persona
                 JOIN usuarios u_emp ON e.id_usuario = u_emp.id_usuario
-                JOIN servicios s ON t.id_servicio = s.id_servicio
+                LEFT JOIN turno_servicio ts ON t.id_turno = ts.id_turno
+                LEFT JOIN servicios s ON ts.id_servicio = s.id_servicio
                 WHERE DATE(t.fecha_hora) IN (%s, %s)
                 AND t.estado = 'programado'
+                GROUP BY t.id_turno
                 ORDER BY t.fecha_hora ASC
             """, (hoy, manana))
             turnos = cursor.fetchall()
@@ -391,7 +387,7 @@ class PanelAdmin(tk.Toplevel):
         nombre = f"{turno['emp_nombre']} {turno['emp_apellido']}"
         tk.Label(frame_info, text=nombre, bg="white", fg="#333333",
                  font=("Poppins ExtraBold", 10)).pack(anchor="w")
-        tk.Label(frame_info, text=turno["servicio"], bg="white",
+        tk.Label(frame_info, text=turno.get("servicios", "—"), bg="white",
                  fg="#666666", font=("Poppins", 9), wraplength=150).pack(anchor="w")
 
         fecha = turno["fecha_hora"]
@@ -450,19 +446,24 @@ class PanelAdmin(tk.Toplevel):
             cursor = conexion.cursor(dictionary=True)
             cursor.execute("""
                 SELECT t.id_turno, t.fecha_hora, t.estado, t.precio_total,
-                       t.sena, t.total_pagado, t.finalizado, t.observaciones,
-                       s.nombre AS servicio, s.duracion AS duracion_servicio,
-                       p_cli.nombre AS cli_nombre, p_cli.apellido AS cli_apellido,
-                       p_emp.nombre AS emp_nombre, p_emp.apellido AS emp_apellido,
+                       t.sena_pagada, t.total_pagado, t.duracion,
+                       t.observaciones,
+                       GROUP_CONCAT(s.nombre SEPARATOR ', ') AS servicios,
+                       p_cli.nombre AS cli_nombre,
+                       p_cli.apellido AS cli_apellido,
+                       p_emp.nombre AS emp_nombre,
+                       p_emp.apellido AS emp_apellido,
                        u_emp.foto AS emp_foto
                 FROM turnos t
-                JOIN servicios s ON t.id_servicio = s.id_servicio
+                LEFT JOIN turno_servicio ts ON t.id_turno = ts.id_turno
+                LEFT JOIN servicios s ON ts.id_servicio = s.id_servicio
                 JOIN clientes c ON t.id_cliente = c.id_cliente
                 JOIN personas p_cli ON c.id_persona = p_cli.id_persona
                 JOIN empleados e ON t.id_empleado = e.id_empleado
                 JOIN personas p_emp ON e.id_persona = p_emp.id_persona
                 JOIN usuarios u_emp ON e.id_usuario = u_emp.id_usuario
                 WHERE t.id_turno = %s
+                GROUP BY t.id_turno
             """, (turno["id_turno"],))
             turno_completo = cursor.fetchone()
         except Exception as e:
@@ -482,7 +483,6 @@ class PanelAdmin(tk.Toplevel):
         vista._mostrar_detalles(turno_completo)
 
     def _mostrar_turnos_dia(self, fecha, frame_padre):
-        # Limpiar frame del día anterior
         for widget in frame_padre.winfo_children():
             widget.destroy()
 
@@ -496,13 +496,15 @@ class PanelAdmin(tk.Toplevel):
                 SELECT t.fecha_hora,
                        p_emp.nombre AS emp_nombre,
                        p_emp.apellido AS emp_apellido,
-                       s.nombre AS servicio
+                       GROUP_CONCAT(s.nombre SEPARATOR ', ') AS servicios
                 FROM turnos t
                 JOIN empleados e ON t.id_empleado = e.id_empleado
                 JOIN personas p_emp ON e.id_persona = p_emp.id_persona
-                JOIN servicios s ON t.id_servicio = s.id_servicio
+                LEFT JOIN turno_servicio ts ON t.id_turno = ts.id_turno
+                LEFT JOIN servicios s ON ts.id_servicio = s.id_servicio
                 WHERE DATE(t.fecha_hora) = %s
                 AND t.estado = 'programado'
+                GROUP BY t.id_turno
                 ORDER BY t.fecha_hora ASC
             """, (fecha,))
             turnos = cursor.fetchall()
@@ -534,7 +536,7 @@ class PanelAdmin(tk.Toplevel):
         for t in turnos:
             hora = t["fecha_hora"].strftime("%H:%M")
             nombre = f"{t['emp_nombre']} {t['emp_apellido']}"
-            texto = f"• {hora}hs — {nombre} — {t['servicio']}"
+            texto = f"• {hora}hs — {nombre} — {t.get('servicios', '—')}"
             tk.Label(
                 frame_padre,
                 text=texto,

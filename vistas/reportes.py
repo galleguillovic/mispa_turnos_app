@@ -1,3 +1,4 @@
+# reportes.py
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os
@@ -196,6 +197,7 @@ class VistaReportes(tk.Frame):
             self.listbox_clientes.insert(tk.END, nombre)
 
     # GENERACIÓN DE PDFs
+
     def _descargar_reporte_turnos(self):
         periodo = self.var_periodo.get()
         if periodo == "Seleccioná":
@@ -217,19 +219,26 @@ class VistaReportes(tk.Frame):
         try:
             cursor = conexion.cursor(dictionary=True)
             cursor.execute("""
-                SELECT t.fecha_hora, t.estado, t.precio_total, t.sena,
-                       p_cli.nombre AS cli_nombre,
+                SELECT t.id_turno,
+                       t.fecha_hora,
+                       t.estado,
+                       t.precio_total,
+                       t.sena_pagada,
+                       p_cli.nombre  AS cli_nombre,
                        p_cli.apellido AS cli_apellido,
-                       p_emp.nombre AS emp_nombre,
+                       p_emp.nombre  AS emp_nombre,
                        p_emp.apellido AS emp_apellido,
-                       s.nombre AS servicio
+                       GROUP_CONCAT(s.nombre ORDER BY s.nombre SEPARATOR ', ')
+                           AS servicios
                 FROM turnos t
-                JOIN clientes c ON t.id_cliente = c.id_cliente
-                JOIN personas p_cli ON c.id_persona = p_cli.id_persona
-                JOIN empleados e ON t.id_empleado = e.id_empleado
-                JOIN personas p_emp ON e.id_persona = p_emp.id_persona
-                JOIN servicios s ON t.id_servicio = s.id_servicio
+                JOIN clientes  c     ON t.id_cliente  = c.id_cliente
+                JOIN personas  p_cli ON c.id_persona  = p_cli.id_persona
+                JOIN empleados e     ON t.id_empleado = e.id_empleado
+                JOIN personas  p_emp ON e.id_persona  = p_emp.id_persona
+                LEFT JOIN turno_servicio ts ON t.id_turno   = ts.id_turno
+                LEFT JOIN servicios      s  ON ts.id_servicio = s.id_servicio
                 WHERE DATE(t.fecha_hora) >= %s
+                GROUP BY t.id_turno
                 ORDER BY t.fecha_hora ASC
             """, (desde,))
             turnos = cursor.fetchall()
@@ -271,15 +280,22 @@ class VistaReportes(tk.Frame):
         try:
             cursor = conexion.cursor(dictionary=True)
             cursor.execute("""
-                SELECT t.fecha_hora, t.estado, t.precio_total, t.sena,
-                       p_emp.nombre AS emp_nombre,
+                SELECT t.id_turno,
+                       t.fecha_hora,
+                       t.estado,
+                       t.precio_total,
+                       t.sena_pagada,
+                       p_emp.nombre  AS emp_nombre,
                        p_emp.apellido AS emp_apellido,
-                       s.nombre AS servicio
+                       GROUP_CONCAT(s.nombre ORDER BY s.nombre SEPARATOR ', ')
+                           AS servicios
                 FROM turnos t
-                JOIN empleados e ON t.id_empleado = e.id_empleado
-                JOIN personas p_emp ON e.id_persona = p_emp.id_persona
-                JOIN servicios s ON t.id_servicio = s.id_servicio
+                JOIN empleados e     ON t.id_empleado = e.id_empleado
+                JOIN personas  p_emp ON e.id_persona  = p_emp.id_persona
+                LEFT JOIN turno_servicio ts ON t.id_turno    = ts.id_turno
+                LEFT JOIN servicios      s  ON ts.id_servicio = s.id_servicio
                 WHERE t.id_cliente = %s
+                GROUP BY t.id_turno
                 ORDER BY t.fecha_hora DESC
             """, (id_cliente,))
             turnos = cursor.fetchall()
@@ -334,37 +350,36 @@ class VistaReportes(tk.Frame):
             f"Período: {periodo} ({desde.strftime('%d/%m/%Y')} - "
             f"{hasta.strftime('%d/%m/%Y')})", sub_style))
         elementos.append(Spacer(1, 0.3*cm))
-
-        # Encabezados
         encabezados = ["Fecha", "Hora", "Cliente", "Empleado",
-                       "Servicio", "Precio", "Seña", "Estado"]
+                       "Servicio(s)", "Precio", "Seña", "Estado"]
         datos = [encabezados]
 
         for t in turnos:
             fecha = t["fecha_hora"]
-            dia = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else str(fecha)
-            hora = fecha.strftime("%H:%M") if hasattr(fecha, "strftime") else ""
-            cliente = f"{t['cli_nombre']} {t['cli_apellido']}"
+            dia  = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else str(fecha)
+            hora = fecha.strftime("%H:%M")    if hasattr(fecha, "strftime") else ""
+            cliente  = f"{t['cli_nombre']} {t['cli_apellido']}"
             empleado = f"{t['emp_nombre']} {t['emp_apellido']}"
-            precio = f"${float(t['precio_total'] or 0):.2f}"
-            sena = f"${float(t['sena'] or 0):.2f}"
+            precio   = f"${float(t['precio_total']  or 0):.2f}"
+            sena     = f"${float(t['sena_pagada']   or 0):.2f}"   # ← corregido
+            servicios = t.get("servicios") or "—"
             datos.append([dia, hora, cliente, empleado,
-                          t["servicio"], precio, sena, t["estado"]])
+                          servicios, precio, sena, t["estado"]])
 
         tabla = Table(datos, repeatRows=1)
         tabla.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), rosa),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, 0), 10),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-            ("FONTSIZE", (0, 1), (-1, -1), 9),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+            ("BACKGROUND",    (0, 0), (-1, 0), rosa),
+            ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
+            ("FONTNAME",      (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE",      (0, 0), (-1, 0), 10),
+            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("FONTNAME",      (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE",      (0, 1), (-1, -1), 9),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1),
              [colors.white, colors.HexColor("#FADADD")]),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("GRID",          (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
+            ("TOPPADDING",    (0, 0), (-1, -1), 6),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ]))
 
@@ -402,39 +417,40 @@ class VistaReportes(tk.Frame):
 
         elementos = []
         elementos.append(Paragraph(
-            f"Historial de cliente - MiSpa Turnos", titulo_style))
+            "Historial de cliente - MiSpa Turnos", titulo_style))
         elementos.append(Paragraph(
             f"Cliente: {nombre_cliente}", sub_style))
         elementos.append(Spacer(1, 0.3*cm))
 
-        encabezados = ["Fecha", "Hora", "Servicio",
+        encabezados = ["Fecha", "Hora", "Servicio(s)",
                        "Empleado", "Precio", "Seña", "Estado"]
         datos = [encabezados]
 
         for t in turnos:
             fecha = t["fecha_hora"]
-            dia = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else str(fecha)
-            hora = fecha.strftime("%H:%M") if hasattr(fecha, "strftime") else ""
-            empleado = f"{t['emp_nombre']} {t['emp_apellido']}"
-            precio = f"${float(t['precio_total'] or 0):.2f}"
-            sena = f"${float(t['sena'] or 0):.2f}"
-            datos.append([dia, hora, t["servicio"], empleado,
+            dia  = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else str(fecha)
+            hora = fecha.strftime("%H:%M")    if hasattr(fecha, "strftime") else ""
+            empleado  = f"{t['emp_nombre']} {t['emp_apellido']}"
+            precio    = f"${float(t['precio_total'] or 0):.2f}"
+            sena      = f"${float(t['sena_pagada']  or 0):.2f}"   # ← corregido
+            servicios = t.get("servicios") or "—"
+            datos.append([dia, hora, servicios, empleado,
                           precio, sena, t["estado"]])
 
         tabla = Table(datos, repeatRows=1)
         tabla.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), rosa),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, 0), 10),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-            ("FONTSIZE", (0, 1), (-1, -1), 9),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+            ("BACKGROUND",    (0, 0), (-1, 0), rosa),
+            ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
+            ("FONTNAME",      (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE",      (0, 0), (-1, 0), 10),
+            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("FONTNAME",      (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE",      (0, 1), (-1, -1), 9),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1),
              [colors.white, colors.HexColor("#FADADD")]),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("GRID",          (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
+            ("TOPPADDING",    (0, 0), (-1, -1), 6),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ]))
 

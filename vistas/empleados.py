@@ -1,7 +1,9 @@
+# empleados.py
 import tkinter as tk
 from tkinter import ttk, messagebox
 import os
 from PIL import Image, ImageTk, ImageDraw
+
 
 class VistaEmpleados(tk.Frame):
     def __init__(self, master, panel):
@@ -15,7 +17,8 @@ class VistaEmpleados(tk.Frame):
         for widget in self.winfo_children():
             widget.destroy()
 
-    # HELPERS
+    # HELPERS 
+
     def _colorear_icono(self, ruta, color_rgb, size=(18, 18)):
         try:
             img = Image.open(ruta).convert("RGBA").resize(size, Image.LANCZOS)
@@ -44,6 +47,8 @@ class VistaEmpleados(tk.Frame):
             except Exception:
                 return None
 
+    # CONSULTAS DB
+
     def _obtener_empleados(self, busqueda=""):
         from db.conexion import obtener_conexion, cerrar_conexion
         conexion = obtener_conexion()
@@ -52,20 +57,29 @@ class VistaEmpleados(tk.Frame):
         try:
             cursor = conexion.cursor(dictionary=True)
             query = """
-                SELECT e.id_empleado, e.especialidad, e.dias_trabajo,
+                SELECT e.id_empleado, e.dias_trabajo,
                        p.nombre, p.apellido, p.dni, p.telefono, p.email,
-                       u.id_usuario, u.nombre_usuario, u.rol, u.foto
+                       u.id_usuario, u.nombre_usuario, u.rol, u.foto,
+                       GROUP_CONCAT(
+                           esp.nombre ORDER BY esp.nombre SEPARATOR ', '
+                       ) AS especialidades
                 FROM empleados e
-                JOIN personas p ON e.id_persona = p.id_persona
-                JOIN usuarios u ON e.id_usuario = u.id_usuario
+                JOIN personas  p   ON e.id_persona  = p.id_persona
+                JOIN usuarios  u   ON e.id_usuario  = u.id_usuario
+                LEFT JOIN empleado_especialidad ee
+                       ON e.id_empleado = ee.id_empleado
+                LEFT JOIN especialidades esp
+                       ON ee.id_especialidad = esp.id_especialidad
                 WHERE e.activo = 1
             """
             if busqueda:
-                query += " AND (p.nombre LIKE %s OR p.apellido LIKE %s)"
-                cursor.execute(query + " ORDER BY p.apellido",
+                query += (" AND (p.nombre LIKE %s OR p.apellido LIKE %s)"
+                          " GROUP BY e.id_empleado ORDER BY p.apellido")
+                cursor.execute(query,
                                (f"%{busqueda}%", f"%{busqueda}%"))
             else:
-                cursor.execute(query + " ORDER BY p.apellido")
+                query += " GROUP BY e.id_empleado ORDER BY p.apellido"
+                cursor.execute(query)
             return cursor.fetchall()
         except Exception as e:
             print(f"Error: {e}")
@@ -73,24 +87,44 @@ class VistaEmpleados(tk.Frame):
         finally:
             cerrar_conexion(conexion, cursor)
 
-    def _obtener_servicios(self):
+    def _obtener_especialidades(self):
         from db.conexion import obtener_conexion, cerrar_conexion
         conexion = obtener_conexion()
         if not conexion:
             return []
         try:
             cursor = conexion.cursor(dictionary=True)
-            cursor.execute("""
-                SELECT id_servicio, nombre FROM servicios
-                WHERE activo = 1 ORDER BY nombre
-            """)
+            cursor.execute(
+                "SELECT id_especialidad, nombre FROM especialidades "
+                "ORDER BY nombre"
+            )
             return cursor.fetchall()
         except Exception:
             return []
         finally:
             cerrar_conexion(conexion, cursor)
 
+    def _obtener_especialidades_empleado(self, id_empleado):
+        """Devuelve lista de id_especialidad asignadas al empleado."""
+        from db.conexion import obtener_conexion, cerrar_conexion
+        conexion = obtener_conexion()
+        if not conexion:
+            return []
+        try:
+            cursor = conexion.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT id_especialidad FROM empleado_especialidad "
+                "WHERE id_empleado = %s",
+                (id_empleado,)
+            )
+            return [row["id_especialidad"] for row in cursor.fetchall()]
+        except Exception:
+            return []
+        finally:
+            cerrar_conexion(conexion, cursor)
+
     # LISTADO
+
     def _mostrar_listado(self):
         self._limpiar()
 
@@ -151,7 +185,8 @@ class VistaEmpleados(tk.Frame):
         self.frame_lista.bind("<Configure>", lambda e: canvas.configure(
             scrollregion=canvas.bbox("all")))
 
-        self._canvas_id = canvas.create_window((0, 0), window=self.frame_lista, anchor="nw")
+        self._canvas_id = canvas.create_window(
+            (0, 0), window=self.frame_lista, anchor="nw")
         canvas.configure(yscrollcommand=scroll_y.set)
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(
             self._canvas_id, width=e.width))
@@ -164,8 +199,7 @@ class VistaEmpleados(tk.Frame):
         busqueda = self.var_buscar.get()
         for widget in self.frame_lista.winfo_children():
             widget.destroy()
-        empleados = self._obtener_empleados(busqueda)
-        self._renderizar_tarjetas(empleados)
+        self._renderizar_tarjetas(self._obtener_empleados(busqueda))
 
     def _cargar_tarjetas(self):
         self._renderizar_tarjetas(self._obtener_empleados())
@@ -188,7 +222,7 @@ class VistaEmpleados(tk.Frame):
             highlightbackground="#D68092",
             highlightthickness=1
         )
-        tarjeta.pack(fill="x", pady=8, expand= True)
+        tarjeta.pack(fill="x", pady=8, expand=True)
 
         # Foto
         frame_foto = tk.Frame(tarjeta, bg="white")
@@ -218,28 +252,24 @@ class VistaEmpleados(tk.Frame):
         ).pack(anchor="w")
 
         campos = [
-            ("Usuario asociado", emp.get("nombre_usuario") or "—"),
-            ("Rol", emp.get("rol") or "—"),
-            ("DNI", str(emp.get("dni")) if emp.get("dni") else "—"),
-            ("Correo electrónico", emp.get("email") or "—"),
-            ("Teléfono", emp.get("telefono") or "—"),
-            ("Servicio/Especialidad(es)", emp.get("especialidad") or "—"),
-            ("Días de trabajo", emp.get("dias_trabajo") or "—"),
+            ("Usuario asociado",        emp.get("nombre_usuario") or "—"),
+            ("Rol",                     emp.get("rol") or "—"),
+            ("DNI",                     str(emp["dni"]) if emp.get("dni") else "—"),
+            ("Correo electrónico",      emp.get("email") or "—"),
+            ("Teléfono",               emp.get("telefono") or "—"),
+            ("Especialidad(es)",        emp.get("especialidades") or "—"),
+            ("Días de trabajo",         emp.get("dias_trabajo") or "—"),
         ]
 
         for etiqueta, valor in campos:
             fila = tk.Frame(frame_derecha, bg="white")
             fila.pack(anchor="w", pady=1)
-            tk.Label(fila, text=f"{etiqueta}:", bg="white",
-                     fg="#555555",
+            tk.Label(fila, text=f"{etiqueta}:", bg="white", fg="#555555",
                      font=("Poppins ExtraBold", 10)).pack(side="left")
-            tk.Label(fila, text=f" {valor}", bg="white",
-                     fg="#555555",
+            tk.Label(fila, text=f" {valor}", bg="white", fg="#555555",
                      font=("Poppins", 10),
-                     wraplength=600,
-                     justify="left").pack(side="left")
+                     wraplength=600, justify="left").pack(side="left")
 
-        # Botones abajo de la info
         frame_btns = tk.Frame(frame_derecha, bg="white")
         frame_btns.pack(anchor="e", pady=(10, 0))
 
@@ -261,7 +291,8 @@ class VistaEmpleados(tk.Frame):
             command=lambda e=emp: self._confirmar_eliminar(e)
         ).pack(side="left", ipadx=10, ipady=6)
 
-    # CONFIRMAR ELIMINAR
+    # CONFIRMAR / ELIMINAR
+
     def _confirmar_eliminar(self, emp):
         popup = tk.Toplevel(self)
         popup.title("")
@@ -278,7 +309,8 @@ class VistaEmpleados(tk.Frame):
 
         tk.Label(
             popup,
-            text=f"Estás a punto de eliminar a {nombre}\ny su cuenta asociada, ¿estás seguro?",
+            text=f"Estás a punto de eliminar a {nombre}\n"
+                 f"y su cuenta asociada, ¿estás seguro?",
             bg="#EEEEEE", fg="#333333",
             font=("Poppins", 11),
             justify="center",
@@ -313,12 +345,22 @@ class VistaEmpleados(tk.Frame):
             return
         try:
             cursor = conexion.cursor()
+            # Eliminar relaciones de especialidades primero
             cursor.execute(
-                "UPDATE empleados SET activo = 0 WHERE id_empleado = %s",
-                (emp["id_empleado"],))
+                "DELETE FROM empleado_especialidad "
+                "WHERE id_empleado = %s",
+                (emp["id_empleado"],)
+            )
             cursor.execute(
-                "UPDATE usuarios SET activo = 0 WHERE id_usuario = %s",
-                (emp["id_usuario"],))
+                "UPDATE empleados SET activo = 0 "
+                "WHERE id_empleado = %s",
+                (emp["id_empleado"],)
+            )
+            cursor.execute(
+                "UPDATE usuarios SET activo = 0 "
+                "WHERE id_usuario = %s",
+                (emp["id_usuario"],)
+            )
             conexion.commit()
             popup.destroy()
             messagebox.showinfo("Éxito", "Empleado eliminado correctamente.")
@@ -329,6 +371,7 @@ class VistaEmpleados(tk.Frame):
             cerrar_conexion(conexion, cursor)
 
     # FORMULARIOS
+
     def _mostrar_formulario_agregar(self):
         self._limpiar()
         self._construir_formulario_con_scroll(modo="agregar")
@@ -350,7 +393,6 @@ class VistaEmpleados(tk.Frame):
         tk.Frame(self, bg="#D68092", height=2).pack(
             fill="x", padx=30, pady=(6, 10))
 
-        # Scroll vertical
         container = tk.Frame(self, bg="#F9F0F2")
         container.pack(fill="both", expand=True, padx=30, pady=(0, 10))
 
@@ -371,7 +413,6 @@ class VistaEmpleados(tk.Frame):
         scroll_y.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
 
-        # Tarjeta dentro del scroll
         tarjeta = tk.Frame(
             frame_scroll, bg="white",
             highlightbackground="#D68092",
@@ -385,7 +426,7 @@ class VistaEmpleados(tk.Frame):
         form = tk.Frame(tarjeta, bg="white")
         form.pack(fill="both", expand=True, padx=25, pady=20)
 
-        # Foto + Nombre + Apellido
+        # Fila 1: Foto + Nombre + Apellido + DNI + Teléfono ──
         frame_fila1 = tk.Frame(form, bg="white")
         frame_fila1.pack(fill="x", pady=(0, 10))
 
@@ -396,7 +437,6 @@ class VistaEmpleados(tk.Frame):
         ruta_foto = None
         if emp and emp.get("foto"):
             ruta_foto = os.path.join("assets", "fotos_perfil", emp["foto"])
-
         foto = self._foto_circular(ruta_foto, size=80)
         if foto:
             self._foto_ref = foto
@@ -446,7 +486,7 @@ class VistaEmpleados(tk.Frame):
         frame_nombres.columnconfigure(0, weight=1)
         frame_nombres.columnconfigure(1, weight=1)
 
-        # Correo y Usuario
+        # Fila 2: Email + Usuario ──
         frame_fila2 = tk.Frame(form, bg="white")
         frame_fila2.pack(fill="x", pady=(10, 0))
 
@@ -472,11 +512,11 @@ class VistaEmpleados(tk.Frame):
         frame_fila2.columnconfigure(0, weight=1)
         frame_fila2.columnconfigure(1, weight=1)
 
-        # Servicios y Días de trabajo
+        # Fila 3: Especialidades (listbox múltiple) + Días de trabajo ──
         frame_fila3 = tk.Frame(form, bg="white")
         frame_fila3.pack(fill="x", pady=(0, 0))
 
-        tk.Label(frame_fila3, text="Servicios/Especialidades:*",
+        tk.Label(frame_fila3, text="Especialidad(es):*",
                  bg="white", fg="#333333",
                  font=("Poppins", 11)).grid(row=0, column=0, sticky="w")
         tk.Label(frame_fila3, text="Día(s) de trabajo (op):",
@@ -484,29 +524,33 @@ class VistaEmpleados(tk.Frame):
                  font=("Poppins", 11)).grid(row=0, column=1, sticky="w",
                                             padx=(20, 0))
 
-        servicios = self._obtener_servicios()
-        self.servicios_data = {s["nombre"]: s["id_servicio"]
-                               for s in servicios}
+        # listbox de especialidades
+        especialidades = self._obtener_especialidades()
+        self.especialidades_data = {
+            e["nombre"]: e["id_especialidad"] for e in especialidades
+        }
 
         frame_listbox = tk.Frame(frame_fila3, bg="white")
         frame_listbox.grid(row=1, column=0, sticky="ew", pady=(4, 10))
 
-        self.listbox_servicios = tk.Listbox(
+        self.listbox_especialidades = tk.Listbox(
             frame_listbox,
             selectmode="multiple",
             font=("Poppins", 10),
             bg="#EEEEEE", bd=0,
             height=4,
-            exportselection=False
+            exportselection=False,
+            selectbackground="#D68092",
+            selectforeground="white"
         )
         scroll_lb = ttk.Scrollbar(frame_listbox, orient="vertical",
-                                  command=self.listbox_servicios.yview)
-        self.listbox_servicios.configure(yscrollcommand=scroll_lb.set)
-        self.listbox_servicios.pack(side="left", fill="x", expand=True)
+                                  command=self.listbox_especialidades.yview)
+        self.listbox_especialidades.configure(yscrollcommand=scroll_lb.set)
+        self.listbox_especialidades.pack(side="left", fill="x", expand=True)
         scroll_lb.pack(side="right", fill="y")
 
-        for nombre in self.servicios_data.keys():
-            self.listbox_servicios.insert(tk.END, nombre)
+        for nombre in self.especialidades_data.keys():
+            self.listbox_especialidades.insert(tk.END, nombre)
 
         self.entry_dias = tk.Entry(
             frame_fila3, font=("Poppins", 11),
@@ -517,7 +561,7 @@ class VistaEmpleados(tk.Frame):
         frame_fila3.columnconfigure(0, weight=1)
         frame_fila3.columnconfigure(1, weight=1)
 
-        # Rol y Contraseña
+        # Fila 4: Rol + Contraseña
         frame_fila4 = tk.Frame(form, bg="white")
         frame_fila4.pack(fill="x", pady=(0, 10))
 
@@ -551,7 +595,7 @@ class VistaEmpleados(tk.Frame):
         frame_fila4.columnconfigure(0, weight=1)
         frame_fila4.columnconfigure(1, weight=1)
 
-        # Prellenar si es editar
+        # Prellenar si es editar 
         if modo == "editar" and emp:
             self.entry_nombre.insert(0, emp.get("nombre", ""))
             self.entry_apellido.insert(0, emp.get("apellido", ""))
@@ -564,12 +608,12 @@ class VistaEmpleados(tk.Frame):
                 self.entry_dias.insert(0, emp["dias_trabajo"])
             self.var_rol.set(emp.get("rol", "estandar"))
 
-            if emp.get("especialidad"):
-                servicios_emp = [s.strip()
-                                 for s in emp["especialidad"].split(",")]
-                for i, nombre in enumerate(self.servicios_data.keys()):
-                    if nombre in servicios_emp:
-                        self.listbox_servicios.selection_set(i)
+            ids_asignados = self._obtener_especialidades_empleado(
+                emp["id_empleado"])
+            nombres_lista = list(self.especialidades_data.keys())
+            for i, nombre in enumerate(nombres_lista):
+                if self.especialidades_data[nombre] in ids_asignados:
+                    self.listbox_especialidades.selection_set(i)
 
         # Botones
         frame_btns = tk.Frame(tarjeta, bg="white")
@@ -595,25 +639,26 @@ class VistaEmpleados(tk.Frame):
         ).pack(side="left", ipadx=15, ipady=8)
 
     # GUARDAR
+
     def _guardar(self, modo, emp=None):
         from utils.helpers import hashear_contrasena
         from db.conexion import obtener_conexion, cerrar_conexion
 
-        nombre = self.entry_nombre.get().strip()
-        apellido = self.entry_apellido.get().strip()
-        dni = self.entry_dni.get().strip()
-        telefono = self.entry_telefono.get().strip()
-        email = self.entry_email.get().strip()
-        usuario = self.entry_usuario.get().strip()
-        dias = self.entry_dias.get().strip()
-        rol = self.var_rol.get()
+        nombre    = self.entry_nombre.get().strip()
+        apellido  = self.entry_apellido.get().strip()
+        dni       = self.entry_dni.get().strip()
+        telefono  = self.entry_telefono.get().strip()
+        email     = self.entry_email.get().strip()
+        usuario   = self.entry_usuario.get().strip()
+        dias      = self.entry_dias.get().strip()
+        rol       = self.var_rol.get()
         contrasena = self.entry_contrasena.get().strip()
-
-        # Servicios seleccionados
-        seleccionados = self.listbox_servicios.curselection()
-        nombres_servicios = [list(self.servicios_data.keys())[i]
-                             for i in seleccionados]
-        especialidad = ", ".join(nombres_servicios)
+        seleccionados = self.listbox_especialidades.curselection()
+        nombres_lista = list(self.especialidades_data.keys())
+        ids_especialidades = [
+            self.especialidades_data[nombres_lista[i]]
+            for i in seleccionados
+        ]
 
         # Validaciones
         if not nombre:
@@ -633,9 +678,9 @@ class VistaEmpleados(tk.Frame):
             messagebox.showwarning("Atención",
                                    "El nombre de usuario es obligatorio.")
             return
-        if not especialidad:
+        if not ids_especialidades:
             messagebox.showwarning("Atención",
-                                   "Seleccioná al menos un servicio.")
+                                   "Seleccioná al menos una especialidad.")
             return
         if modo == "agregar" and not contrasena:
             messagebox.showwarning("Atención",
@@ -655,8 +700,7 @@ class VistaEmpleados(tk.Frame):
                     INSERT INTO personas
                     (nombre, apellido, dni, telefono, email)
                     VALUES (%s, %s, %s, %s, %s)
-                """, (nombre, apellido, dni or None,
-                      telefono, email))
+                """, (nombre, apellido, dni or None, telefono, email))
                 id_persona = cursor.lastrowid
 
                 cursor.execute("""
@@ -668,16 +712,16 @@ class VistaEmpleados(tk.Frame):
 
                 cursor.execute("""
                     INSERT INTO empleados
-                    (id_persona, id_usuario, especialidad, dias_trabajo,
-                     activo)
-                    VALUES (%s, %s, %s, %s, 1)
-                """, (id_persona, id_usuario, especialidad,
-                      dias or None))
+                    (id_persona, id_usuario, dias_trabajo, activo)
+                    VALUES (%s, %s, %s, 1)
+                """, (id_persona, id_usuario, dias or None))
+                id_empleado = cursor.lastrowid
 
             else:
                 cursor.execute("""
-                    UPDATE personas SET nombre=%s, apellido=%s,
-                    dni=%s, telefono=%s, email=%s
+                    UPDATE personas SET
+                        nombre = %s, apellido = %s, dni = %s,
+                        telefono = %s, email = %s
                     WHERE id_persona = (
                         SELECT id_persona FROM empleados
                         WHERE id_empleado = %s)
@@ -687,21 +731,34 @@ class VistaEmpleados(tk.Frame):
                 if contrasena:
                     hash_pass = hashear_contrasena(contrasena)
                     cursor.execute("""
-                        UPDATE usuarios SET nombre_usuario=%s,
-                        rol=%s, contrasena=%s
-                        WHERE id_usuario=%s
+                        UPDATE usuarios SET
+                            nombre_usuario = %s, rol = %s, contrasena = %s
+                        WHERE id_usuario = %s
                     """, (usuario, rol, hash_pass, emp["id_usuario"]))
                 else:
                     cursor.execute("""
-                        UPDATE usuarios SET nombre_usuario=%s, rol=%s
-                        WHERE id_usuario=%s
+                        UPDATE usuarios SET nombre_usuario = %s, rol = %s
+                        WHERE id_usuario = %s
                     """, (usuario, rol, emp["id_usuario"]))
 
                 cursor.execute("""
-                    UPDATE empleados SET especialidad=%s,
-                    dias_trabajo=%s
-                    WHERE id_empleado=%s
-                """, (especialidad, dias or None, emp["id_empleado"]))
+                    UPDATE empleados SET dias_trabajo = %s
+                    WHERE id_empleado = %s
+                """, (dias or None, emp["id_empleado"]))
+
+                id_empleado = emp["id_empleado"]
+                cursor.execute(
+                    "DELETE FROM empleado_especialidad "
+                    "WHERE id_empleado = %s",
+                    (id_empleado,)
+                )
+
+            for id_esp in ids_especialidades:
+                cursor.execute(
+                    "INSERT INTO empleado_especialidad "
+                    "(id_empleado, id_especialidad) VALUES (%s, %s)",
+                    (id_empleado, id_esp)
+                )
 
             conexion.commit()
             messagebox.showinfo("Éxito", "Empleado guardado correctamente.")

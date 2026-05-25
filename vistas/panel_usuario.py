@@ -54,7 +54,6 @@ class PanelUsuario(tk.Toplevel):
                 ruta, (214, 128, 146))
 
     # ESTRUCTURA
-
     def _construir_ui(self):
         self.sidebar = tk.Frame(self, bg="#D68092", width=220)
         self.sidebar.pack(side="left", fill="y")
@@ -65,9 +64,8 @@ class PanelUsuario(tk.Toplevel):
 
         self._construir_sidebar()
         self._mostrar_inicio()
-
+        
     # SIDEBAR 
-
     def _construir_sidebar(self):
         frame_perfil = tk.Frame(self.sidebar, bg="#D68092")
         frame_perfil.pack(pady=(30, 10))

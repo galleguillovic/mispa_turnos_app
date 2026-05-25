@@ -53,7 +53,6 @@ class VistaServicios(tk.Frame):
         return self._iconos[key]
 
     # CONSULTAS DB
-
     def _obtener_especialidades(self):
         from db.conexion import obtener_conexion, cerrar_conexion
         conexion = obtener_conexion()

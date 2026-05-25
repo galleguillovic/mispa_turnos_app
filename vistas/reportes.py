@@ -197,7 +197,6 @@ class VistaReportes(tk.Frame):
             self.listbox_clientes.insert(tk.END, nombre)
 
     # GENERACIÓN DE PDFs
-
     def _descargar_reporte_turnos(self):
         periodo = self.var_periodo.get()
         if periodo == "Seleccioná":

@@ -45,7 +45,6 @@ class VistaTurnosUsuario(tk.Frame):
             return str(horas_float)
 
     # CONSULTA: solo turnos del empleado logueado
-
     def _obtener_turnos(self, busqueda=""):
         from db.conexion import obtener_conexion, cerrar_conexion
         conexion = obtener_conexion()

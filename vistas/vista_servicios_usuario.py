@@ -19,7 +19,6 @@ class VistaServiciosUsuario(tk.Frame):
             widget.destroy()
 
     # HELPERS
-
     def _duracion_a_texto(self, horas_float):
         try:
             horas   = int(horas_float)
@@ -53,7 +52,6 @@ class VistaServiciosUsuario(tk.Frame):
         return self._iconos[key]
 
     # CONSULTAS DB
-
     def _obtener_servicios(self, busqueda=""):
         from db.conexion import obtener_conexion, cerrar_conexion
         conexion = obtener_conexion()

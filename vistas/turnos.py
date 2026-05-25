@@ -49,7 +49,6 @@ class VistaTurnos(tk.Frame):
             return str(horas_float)
 
     # CONSULTAS DB
-
     def _obtener_turnos(self, busqueda=""):
         from db.conexion import obtener_conexion, cerrar_conexion
         conexion = obtener_conexion()

@@ -4,10 +4,8 @@ from utils.helpers import verificar_contrasena
 
 
 def autenticar_usuario(credencial, contrasena):
-    """
-    Autentica por correo electrónico (personas.email)
-    O por nombre de usuario (usuarios.nombre_usuario).
-    """
+    """ Autentica por correo electrónico (personas.email) 
+     O por nombre de usuario (usuarios.nombre_usuario). """
     conexion = obtener_conexion()
     if not conexion:
         return None

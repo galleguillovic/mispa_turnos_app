@@ -88,7 +88,7 @@ Ejecutar la aplicación:
 python main.py
 ```
 #### Generar el ejecutable
-Si clonas mi directorio de git, pero quieres generar tú mismo el ejecutable, primero borra las carpetas "build/", "dist/" y el archivo "MiSpa Turnos.spec". Luego ejecuta este comando desde la terminal:
+Si clonas mi directorio de git, y quieres generar el ejecutable, escribe este comando desde la terminal:
 ```
 python -m PyInstaller --noconfirm --onedir --windowed \
   --name "MiSpa Turnos" \

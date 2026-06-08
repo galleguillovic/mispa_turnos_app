@@ -91,7 +91,7 @@ CREATE TABLE servicios (
     nombre          VARCHAR(100)  NOT NULL,
     descripcion     TEXT,
     precio          DECIMAL(10,2) NOT NULL,
-    duracion        FLOAT         NOT NULL COMMENT 'duración en horas',
+    duracion        FLOAT         NOT NULL COMMENT 'duracion en horas',
     protocolos      TEXT,
     activo          TINYINT(1)    DEFAULT 1,
     FOREIGN KEY (id_especialidad) REFERENCES especialidades(id_especialidad)
@@ -107,9 +107,9 @@ CREATE TABLE turnos (
     fecha_hora    DATETIME      NOT NULL,
     estado        ENUM('programado', 'completado', 'cancelado') DEFAULT 'programado',
     precio_total  DECIMAL(10,2),
-    sena_pagada   DECIMAL(10,2),
+    sena_pagada   DECIMAL(10,2) DEFAULT NULL,
     total_pagado  TINYINT(1)    DEFAULT 0,
-    duracion      FLOAT         COMMENT 'duración total en horas',
+    duracion      FLOAT         COMMENT 'duracion total en horas',
     observaciones TEXT,
     FOREIGN KEY (id_cliente)  REFERENCES clientes(id_cliente),
     FOREIGN KEY (id_empleado) REFERENCES empleados(id_empleado)
@@ -127,7 +127,7 @@ CREATE TABLE turno_servicio (
 );
 
 -- -------------------------------------------------------------
--- TABLA: configuracion general de la empresa
+-- TABLA: configuracion general
 -- -------------------------------------------------------------
 CREATE TABLE configuracion (
     id_config INT AUTO_INCREMENT PRIMARY KEY,
@@ -139,9 +139,7 @@ CREATE TABLE configuracion (
 --  DATOS INICIALES
 -- =============================================================
 
--- -------------------------------------------------------------
--- Configuración básica de la empresa
--- -------------------------------------------------------------
+-- Configuracion basica de la empresa
 INSERT INTO configuracion (clave, valor) VALUES
 ('nombre_empresa', 'Macaspa'),
 ('direccion',      'Las Acacias 2553, Barrio Vial, La Rioja'),
@@ -149,141 +147,144 @@ INSERT INTO configuracion (clave, valor) VALUES
 ('instagram',      '@macaspalr'),
 ('horario_inicio', '15:00'),
 ('horario_fin',    '20:00'),
-('dias_laborales', 'martes,miércoles,jueves,viernes,sábado'),
+('dias_laborales', 'martes,miercoles,jueves,viernes,sabado'),
 ('monto_sena',     '2000');
 
--- -------------------------------------------------------------
 -- Especialidades
--- -------------------------------------------------------------
-INSERT INTO especialidades (id_especialidad, nombre, descripcion) VALUES
-(1, 'Manicura y Pedicura',
- 'Servicios relacionados al cuidado integral para manos y pies para lucir unas uñas impecables, sanas y cuidadas.'),
-(4, 'Cejas y Pestañas',
- 'Tratamientos diseñados para potenciar y enmarcar la mirada de forma natural sin necesidad de maquillaje diario.'),
-(5, 'Tratamientos Faciales',
+INSERT INTO especialidades (nombre, descripcion) VALUES
+('Manicura y Pedicura',
+ 'Servicios relacionados al cuidado integral para manos y pies para lucir unas unas impecables, sanas y cuidadas.'),
+('Cejas y Pestanas',
+ 'Tratamientos disenados para potenciar y enmarcar la mirada de forma natural sin necesidad de maquillaje diario.'),
+('Tratamientos Faciales',
  'Procedimientos personalizados para cuidar, rejuvenecer y proteger la piel del rostro, buscan devolver la luminosidad, firmeza y vitalidad a la dermis.'),
-(6, 'Tratamientos Corporales',
- 'Terapias enfocadas en el bienestar y la estética de todo el cuerpo. Incluye masajes relajantes, reductores o drenantes con técnicas avanzadas para moldear la silueta, combatir la celulitis, mejorar la circulación y liberar el estrés.'),
-(7, 'Depilación Láser',
- 'La solución más cómoda, rápida y duradera para eliminar el vello no deseado. Utiliza tecnología de luz pulsada o láser para debilitar el folículo piloso desde la raíz, logrando una piel suave y libre de vello de forma progresiva y segura.');
+('Tratamientos Corporales',
+ 'Terapias enfocadas en el bienestar y la estetica de todo el cuerpo. Incluye masajes relajantes, reductores o drenantes con tecnicas avanzadas para moldear la silueta, combatir la celulitis, mejorar la circulacion y liberar el estres.'),
+('Depilacion Laser',
+ 'La solucion mas comoda, rapida y duradera para eliminar el vello no deseado. Utiliza tecnologia de luz pulsada o laser para debilitar el foliculo piloso desde la raiz, logrando una piel suave y libre de vello de forma progresiva y segura.');
 
--- -------------------------------------------------------------
--- Servicios
--- -------------------------------------------------------------
-INSERT INTO servicios (id_servicio, id_especialidad, nombre, descripcion, precio, duracion, protocolos) VALUES
--- Manicura y Pedicura
-(5,  1, 'Arreglo por uña',
- 'Reparación individual de uñas quebradas o dañadas para mantener una apariencia prolija y uniforme.',
- 5000.00, 0.5, 'Evaluación de la uña, reconstrucción o reparación, limado y sellado final.'),
-(6,  1, 'Esculpidas en gel 1&2 o 3&4',
- 'Extensión y modelado de uñas con gel para lograr mayor largo, resistencia y diseño personalizado.',
- 20000.00, 2.0, 'Preparación de la uña natural, colocación de molde, aplicación de gel, curado en cabina, limado y terminación.'),
-(7,  1, 'Manicure + Esmaltado Semipermanente',
+-- Servicios - Manicura y Pedicura (id_especialidad = 1)
+INSERT INTO servicios (id_especialidad, nombre, descripcion, precio, duracion, protocolos) VALUES
+(1, 'Arreglo por una',
+ 'Reparacion individual de unas quebradas o danadas para mantener una apariencia prolija y uniforme.',
+ 5000.00, 0.5, 'Evaluacion de la una, reconstruccion o reparacion, limado y sellado final.'),
+(1, 'Esculpidas en gel 1&2 o 3&4',
+ 'Extension y modelado de unas con gel para lograr mayor largo, resistencia y diseno personalizado.',
+ 20000.00, 2.0, 'Preparacion de la una natural, colocacion de molde, aplicacion de gel, curado en cabina, limado y terminacion.'),
+(1, 'Manicure + Esmaltado Semipermanente',
  'Servicio de cuidado de manos con esmaltado duradero y acabado brillante, liso o decorado.',
- 14000.00, 1.2, 'Limpieza de cutículas, limado, preparación de la uña, aplicación de base, color/diseño y sellado.'),
-(8,  1, 'Manicure + Kapping + Esmaltado Semipermanente',
- 'Refuerzo de la uña natural con capa protectora y esmaltado de larga duración.',
- 16000.00, 1.6, 'Preparación de uñas, aplicación de kapping, curado en cabina, esmaltado y sellado.'),
-(9,  1, 'Manicure sin esmaltado',
- 'Cuidado estético de manos y uñas con acabado natural y prolijo.',
- 12000.00, 0.8, 'Higiene, corte y limado, tratamiento de cutículas e hidratación.'),
-(10, 1, 'Pedicure + esmaltado semipermanente',
+ 14000.00, 1.2, 'Limpieza de cuticulas, limado, preparacion de la una, aplicacion de base, color/diseno y sellado.'),
+(1, 'Manicure + Kapping + Esmaltado Semipermanente',
+ 'Refuerzo de la una natural con capa protectora y esmaltado de larga duracion.',
+ 16000.00, 1.6, 'Preparacion de unas, aplicacion de kapping, curado en cabina, esmaltado y sellado.'),
+(1, 'Manicure sin esmaltado',
+ 'Cuidado estetico de manos y unas con acabado natural y prolijo.',
+ 12000.00, 0.8, 'Higiene, corte y limado, tratamiento de cuticulas e hidratacion.'),
+(1, 'Pedicure + esmaltado semipermanente',
  'Tratamiento completo para pies con esmaltado resistente y duradero.',
- 11000.00, 1.2, 'Limpieza, exfoliación suave, cuidado de cutículas, esmaltado y sellado.'),
-(11, 1, 'Pedicure + exfoliación + pulido sin esmaltar',
- 'Renovación y suavizado de pies con acabado natural.',
- 10000.00, 0.8, 'Higiene, exfoliación, eliminación de durezas, pulido e hidratación.'),
-(12, 1, 'Retirado de esmaltado semipermanente',
- 'Remoción segura del esmalte sin dañar la uña natural.',
- 6000.00, 0.4, 'Ablandado del producto, retiro cuidadoso, limado suave e hidratación.'),
-(13, 1, 'Retirado de uñas esculpidas',
- 'Eliminación profesional de uñas artificiales preservando la salud de la uña natural.',
- 7000.00, 0.8, 'Limado técnico, remoción del material y tratamiento hidratante.'),
-(14, 1, 'Service',
- 'Mantenimiento de uñas esculpidas o kapping para conservar su estética y duración.',
- 12000.00, 1.5, 'Relleno de crecimiento, reparación si es necesario, limado y esmaltado final.'),
-(15, 1, 'Softgel',
+ 11000.00, 1.2, 'Limpieza, exfoliacion suave, cuidado de cuticulas, esmaltado y sellado.'),
+(1, 'Pedicure + exfoliacion + pulido sin esmaltar',
+ 'Renovacion y suavizado de pies con acabado natural.',
+ 10000.00, 0.8, 'Higiene, exfoliacion, eliminacion de durezas, pulido e hidratacion.'),
+(1, 'Retirado de esmaltado semipermanente',
+ 'Remocion segura del esmalte sin danar la una natural.',
+ 6000.00, 0.4, 'Ablandado del producto, retiro cuidadoso, limado suave e hidratacion.'),
+(1, 'Retirado de unas esculpidas',
+ 'Eliminacion profesional de unas artificiales preservando la salud de la una natural.',
+ 7000.00, 0.8, 'Limado tecnico, remocion del material y tratamiento hidratante.'),
+(1, 'Service',
+ 'Mantenimiento de unas esculpidas o kapping para conservar su estetica y duracion.',
+ 12000.00, 1.5, 'Relleno de crecimiento, reparacion si es necesario, limado y esmaltado final.'),
+(1, 'Softgel',
  'Sistema de extensiones con tips de gel que brinda un acabado natural y liviano.',
- 18000.00, 1.8, 'Preparación de uñas, colocación de tips softgel, curado en cabina y terminación.'),
--- Cejas y Pestañas
-(16, 4, 'Extensión de pestañas clásicas',
- 'Aplicación pelo por pelo para lograr un efecto natural y definido.',
- 10000.00, 1.5, 'Limpieza de pestañas, aislamiento y colocación individual de extensiones.'),
-(17, 4, 'Extensión de pestañas con volumen',
- 'Técnica de abanicos de pestañas para mayor volumen e intensidad.',
- 12000.00, 2.4, 'Preparación del área, colocación de abanicos y sellado final.'),
-(18, 4, 'Extensión de pestañas tipo wet',
- 'Efecto húmedo y moderno con acabado definido y voluminoso.',
- 14000.00, 1.7, 'Higiene, diseño personalizado y aplicación estratégica de extensiones.'),
-(19, 4, 'Lifting de pestañas',
- 'Curvado y elevación de pestañas naturales para una mirada más abierta.',
- 9000.00, 0.8, 'Limpieza, moldeado, aplicación de productos fijadores y nutrición final.'),
-(20, 4, 'Perfilado + laminado + tinte + brown laminations',
- 'Diseño integral de cejas para lograr forma, definición y efecto peinado duradero.',
- 8000.00, 1.2, 'Perfilado, laminado, aplicación de tinte y fijación.'),
-(21, 4, 'Perfilado de cejas',
- 'Diseño y definición de cejas según la armonía del rostro.',
- 6000.00, 0.4, 'Análisis de forma, depilación y definición.'),
-(22, 4, 'Perfilado de cejas con tinta',
+ 18000.00, 1.8, 'Preparacion de unas, colocacion de tips softgel, curado en cabina y terminacion.');
+
+-- Servicios - Cejas y Pestanas (id_especialidad = 2)
+INSERT INTO servicios (id_especialidad, nombre, descripcion, precio, duracion, protocolos) VALUES
+(2, 'Extension de pestanas clasicas',
+ 'Aplicacion pelo por pelo para lograr un efecto natural y definido.',
+ 10000.00, 1.5, 'Limpieza de pestanas, aislamiento y colocacion individual de extensiones.'),
+(2, 'Extension de pestanas con volumen',
+ 'Tecnica de abanicos de pestanas para mayor volumen e intensidad.',
+ 12000.00, 2.4, 'Preparacion del area, colocacion de abanicos y sellado final.'),
+(2, 'Extension de pestanas tipo wet',
+ 'Efecto humedo y moderno con acabado definido y voluminoso.',
+ 14000.00, 1.7, 'Higiene, diseno personalizado y aplicacion estrategica de extensiones.'),
+(2, 'Lifting de pestanas',
+ 'Curvado y elevacion de pestanas naturales para una mirada mas abierta.',
+ 9000.00, 0.8, 'Limpieza, moldeado, aplicacion de productos fijadores y nutricion final.'),
+(2, 'Perfilado + laminado + tinte + brown laminations',
+ 'Diseno integral de cejas para lograr forma, definicion y efecto peinado duradero.',
+ 8000.00, 1.2, 'Perfilado, laminado, aplicacion de tinte y fijacion.'),
+(2, 'Perfilado de cejas',
+ 'Diseno y definicion de cejas segun la armonia del rostro.',
+ 6000.00, 0.4, 'Analisis de forma, depilacion y definicion.'),
+(2, 'Perfilado de cejas con tinta',
  'Perfilado con efecto maquillado semipermanente.',
- 8000.00, 0.8, 'Diseño de cejas, aplicación de tinta y acabado final.'),
-(23, 4, 'Permanente de pestañas',
- 'Tratamiento para mantener las pestañas curvadas por más tiempo.',
- 9000.00, 0.9, 'Limpieza, aplicación de molde y productos permanentes, hidratación final.'),
--- Tratamientos Faciales
-(24, 5, 'Dermapen',
- 'Tratamiento de microneedling que estimula colágeno y mejora textura de la piel.',
- 9000.00, 1.0, 'Limpieza facial, aplicación de activos, uso de dermapen y máscara calmante.'),
-(25, 5, 'Dermaplaning',
- 'Exfoliación superficial que elimina células muertas y vello fino del rostro.',
- 11000.00, 0.84, 'Limpieza, exfoliación con bisturí dermatológico e hidratación.'),
-(26, 5, 'Facial para embarazadas',
+ 8000.00, 0.8, 'Diseno de cejas, aplicacion de tinta y acabado final.'),
+(2, 'Permanente de pestanas',
+ 'Tratamiento para mantener las pestanas curvadas por mas tiempo.',
+ 9000.00, 0.9, 'Limpieza, aplicacion de molde y productos permanentes, hidratacion final.');
+
+-- Servicios - Tratamientos Faciales (id_especialidad = 3)
+INSERT INTO servicios (id_especialidad, nombre, descripcion, precio, duracion, protocolos) VALUES
+(3, 'Dermapen',
+ 'Tratamiento de microneedling que estimula colageno y mejora textura de la piel.',
+ 9000.00, 1.0, 'Limpieza facial, aplicacion de activos, uso de dermapen y mascara calmante.'),
+(3, 'Dermaplaning',
+ 'Exfoliacion superficial que elimina celulas muertas y vello fino del rostro.',
+ 11000.00, 0.84, 'Limpieza, exfoliacion con bisturi dermatologico e hidratacion.'),
+(3, 'Facial para embarazadas',
  'Tratamiento suave y seguro adaptado a pieles sensibles durante el embarazo.',
- 10000.00, 0.67, 'Limpieza, hidratación y masaje facial con productos aptos.'),
-(27, 5, 'Limpieza profunda + punta de diamante',
- 'Renovación facial intensiva para limpiar impurezas y mejorar la textura de la piel.',
- 15000.00, 1.5, 'Higiene, exfoliación, extracción, punta de diamante y máscara final.'),
-(28, 5, 'Radiofrecuencia en rostro, cuello y escote',
- 'Tratamiento reafirmante que estimula colágeno y mejora la firmeza.',
- 20000.00, 0.75, 'Limpieza, aplicación de gel conductor y radiofrecuencia localizada.'),
-(29, 5, 'Renovación facial',
+ 10000.00, 0.67, 'Limpieza, hidratacion y masaje facial con productos aptos.'),
+(3, 'Limpieza profunda + punta de diamante',
+ 'Renovacion facial intensiva para limpiar impurezas y mejorar la textura de la piel.',
+ 15000.00, 1.5, 'Higiene, exfoliacion, extraccion, punta de diamante y mascara final.'),
+(3, 'Radiofrecuencia en rostro, cuello y escote',
+ 'Tratamiento reafirmante que estimula colageno y mejora la firmeza.',
+ 20000.00, 0.75, 'Limpieza, aplicacion de gel conductor y radiofrecuencia localizada.'),
+(3, 'Renovacion facial',
  'Tratamiento revitalizante para devolver luminosidad y frescura a la piel.',
- 22000.00, 1.5, 'Limpieza, exfoliación, activos nutritivos y máscara hidratante.'),
-(30, 5, 'Tratamiento control de acné',
- 'Tratamiento específico para disminuir brotes, oleosidad e inflamación.',
- 18500.00, 1.0, 'Limpieza profunda, extracción controlada, activos descongestivos y máscara calmante.'),
--- Tratamientos Corporales
-(31, 6, 'Descontracturante completo',
- 'Masaje terapéutico para aliviar tensiones musculares y contracturas.',
- 7500.00, 0.75, 'Evaluación muscular, masaje profundo y relajación final.'),
-(32, 6, 'Drenaje linfático completo',
- 'Técnica suave que estimula la circulación linfática y reduce retención de líquidos.',
- 10500.00, 1.5, 'Maniobras lentas y rítmicas sobre zonas específicas del cuerpo.'),
-(33, 6, 'Masaje deportivo',
- 'Tratamiento orientado a preparar o recuperar músculos luego de la actividad física.',
- 7000.00, 0.75, 'Trabajo muscular localizado, elongación y descarga muscular.'),
-(34, 6, 'Masaje facial',
+ 22000.00, 1.5, 'Limpieza, exfoliacion, activos nutritivos y mascara hidratante.'),
+(3, 'Tratamiento control de acne',
+ 'Tratamiento especifico para disminuir brotes, oleosidad e inflamacion.',
+ 18500.00, 1.0, 'Limpieza profunda, extraccion controlada, activos descongestivos y mascara calmante.');
+
+-- Servicios - Tratamientos Corporales (id_especialidad = 4)
+INSERT INTO servicios (id_especialidad, nombre, descripcion, precio, duracion, protocolos) VALUES
+(4, 'Descontracturante completo',
+ 'Masaje terapeutico para aliviar tensiones musculares y contracturas.',
+ 7500.00, 0.75, 'Evaluacion muscular, masaje profundo y relajacion final.'),
+(4, 'Drenaje linfatico completo',
+ 'Tecnica suave que estimula la circulacion linfatica y reduce retencion de liquidos.',
+ 10500.00, 1.5, 'Maniobras lentas y ritmicas sobre zonas especificas del cuerpo.'),
+(4, 'Masaje deportivo',
+ 'Tratamiento orientado a preparar o recuperar musculos luego de la actividad fisica.',
+ 7000.00, 0.75, 'Trabajo muscular localizado, elongacion y descarga muscular.'),
+(4, 'Masaje facial',
  'Masaje relajante y revitalizante para rostro y cuello.',
- 6500.00, 0.5, 'Limpieza ligera, maniobras faciales y aplicación de hidratantes.'),
-(35, 6, 'Masaje pre natal o para embarazadas',
- 'Masaje adaptado para aliviar molestias y favorecer la relajación durante el embarazo.',
- 9500.00, 1.0, 'Posiciones seguras, maniobras suaves y relajación integral.'),
-(36, 6, 'Radiofrecuencia por zona',
+ 6500.00, 0.5, 'Limpieza ligera, maniobras faciales y aplicacion de hidratantes.'),
+(4, 'Masaje pre natal o para embarazadas',
+ 'Masaje adaptado para aliviar molestias y favorecer la relajacion durante el embarazo.',
+ 9500.00, 1.0, 'Posiciones seguras, maniobras suaves y relajacion integral.'),
+(4, 'Radiofrecuencia por zona',
  'Tratamiento corporal reafirmante y modelador localizado.',
- 6500.00, 0.5, 'Aplicación de gel conductor y radiofrecuencia en la zona elegida.'),
-(37, 6, 'Reductor en zona',
- 'Tratamiento estético enfocado en modelar y reducir adiposidad localizada.',
- 6500.00, 0.75, 'Evaluación corporal, técnicas reductoras y aplicación de activos específicos.'),
--- Depilación Láser
-(38, 7, 'Depilación definitiva cuerpo completo o por zonas',
- 'Tratamiento que reduce progresivamente el crecimiento del vello mediante tecnología láser.',
- 5000.00, 0.5, 'Evaluación de piel y vello, rasurado previo, aplicación de láser y cuidados post tratamiento.');
+ 6500.00, 0.5, 'Aplicacion de gel conductor y radiofrecuencia en la zona elegida.'),
+(4, 'Reductor en zona',
+ 'Tratamiento estetico enfocado en modelar y reducir adiposidad localizada.',
+ 6500.00, 0.75, 'Evaluacion corporal, tecnicas reductoras y aplicacion de activos especificos.');
+
+-- Servicios - Depilacion Laser (id_especialidad = 5)
+INSERT INTO servicios (id_especialidad, nombre, descripcion, precio, duracion, protocolos) VALUES
+(5, 'Depilacion definitiva cuerpo completo o por zonas',
+ 'Tratamiento que reduce progresivamente el crecimiento del vello mediante tecnologia laser.',
+ 5000.00, 0.5, 'Evaluacion de piel y vello, rasurado previo, aplicacion de laser y cuidados post tratamiento.');
 
 -- -------------------------------------------------------------
 -- Usuario administrador por defecto
--- Credenciales: usuario = admin | contraseña = admin1234
--- ¡IMPORTANTE: cambiar la contraseña al iniciar el sistema
---  por primera vez desde Configurar Perfil!
+-- Credenciales: usuario = admin | contrasena = admin1234
+-- IMPORTANTE: cambiar la contrasena al iniciar el sistema
+-- por primera vez desde Configurar Perfil
 -- -------------------------------------------------------------
 INSERT INTO personas (nombre, apellido, email)
 VALUES ('Administrador', 'Sistema', 'admin@mispa.com');
@@ -296,5 +297,3 @@ VALUES (
     'administrador',
     1
 );
-ENDSQL
-echo "OK"

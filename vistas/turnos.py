@@ -6,8 +6,9 @@ import datetime
 import os
 from PIL import Image, ImageTk
 
+
 class VistaTurnos(tk.Frame):
-    def __init__(self, master, panel):
+    def __init__(self, master, panel, mostrar_listado=True):
         super().__init__(master, bg="#F9F0F2")
         self.panel = panel
         self.pack(fill="both", expand=True)
@@ -15,7 +16,8 @@ class VistaTurnos(tk.Frame):
         self._ico_ojo = None
         self._ico_buscar = None
         self._foto_user = None
-        self._mostrar_listado()
+        if mostrar_listado:
+            self._mostrar_listado()
 
     def _limpiar(self):
         for widget in self.winfo_children():
@@ -49,6 +51,7 @@ class VistaTurnos(tk.Frame):
             return str(horas_float)
 
     # CONSULTAS DB
+
     def _obtener_turnos(self, busqueda=""):
         from db.conexion import obtener_conexion, cerrar_conexion
         conexion = obtener_conexion()
@@ -74,7 +77,7 @@ class VistaTurnos(tk.Frame):
                 JOIN empleados e ON t.id_empleado = e.id_empleado
                 JOIN personas p_emp ON e.id_persona = p_emp.id_persona
                 JOIN usuarios u_emp ON e.id_usuario = u_emp.id_usuario
-                WHERE t.estado != 'cancelado'
+                WHERE t.estado = 'programado'
             """
             if busqueda:
                 query += """
@@ -111,8 +114,23 @@ class VistaTurnos(tk.Frame):
         finally:
             cerrar_conexion(conexion, cursor)
 
+    def _obtener_ids_servicios_turno(self, id_turno):
+        from db.conexion import obtener_conexion, cerrar_conexion
+        conexion = obtener_conexion()
+        if not conexion:
+            return []
+        try:
+            cursor = conexion.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT id_servicio FROM turno_servicio WHERE id_turno = %s",
+                (id_turno,))
+            return [row["id_servicio"] for row in cursor.fetchall()]
+        except Exception:
+            return []
+        finally:
+            cerrar_conexion(conexion, cursor)
+
     def _obtener_todos_empleados(self):
-        """Todos los empleados activos, sin filtro de especialidad."""
         from db.conexion import obtener_conexion, cerrar_conexion
         conexion = obtener_conexion()
         if not conexion:
@@ -132,14 +150,8 @@ class VistaTurnos(tk.Frame):
             cerrar_conexion(conexion, cursor)
 
     def _obtener_empleados_por_especialidades(self, ids_especialidades):
-        """
-        Devuelve empleados activos que tengan TODAS las especialidades
-        indicadas en ids_especialidades.
-        Si la lista está vacía, devuelve todos.
-        """
         if not ids_especialidades:
             return self._obtener_todos_empleados()
-
         from db.conexion import obtener_conexion, cerrar_conexion
         conexion = obtener_conexion()
         if not conexion:
@@ -198,7 +210,6 @@ class VistaTurnos(tk.Frame):
             cursor = conexion.cursor(dictionary=True)
             inicio_nuevo = fecha_hora
             fin_nuevo = fecha_hora + datetime.timedelta(minutes=duracion_min)
-
             query = """
                 SELECT t.id_turno, t.fecha_hora, t.duracion
                 FROM turnos t
@@ -208,17 +219,13 @@ class VistaTurnos(tk.Frame):
                      OR ts.id_servicio IN ({placeholders}))
                 AND DATE(t.fecha_hora) = %s
             """.format(placeholders=",".join(["%s"] * len(ids_servicios)))
-
             params = [id_empleado] + ids_servicios + [fecha_hora.date()]
-
             if excluir_turno:
                 query += " AND t.id_turno != %s"
                 params.append(excluir_turno)
-
             query += " GROUP BY t.id_turno"
             cursor.execute(query, params)
             turnos = cursor.fetchall()
-
             for t in turnos:
                 duracion = t.get("duracion") or 0
                 inicio_ex = t["fecha_hora"]
@@ -241,12 +248,9 @@ class VistaTurnos(tk.Frame):
         frame_top = tk.Frame(self, bg="#F9F0F2")
         frame_top.pack(fill="x", padx=30, pady=(20, 0))
 
-        tk.Label(
-            frame_top,
-            text="Listado de turnos",
-            bg="#F9F0F2", fg="#D68092",
-            font=("Poppins ExtraBold", 18)
-        ).pack(side="left")
+        tk.Label(frame_top, text="Listado de turnos",
+                 bg="#F9F0F2", fg="#D68092",
+                 font=("Poppins ExtraBold", 18)).pack(side="left")
 
         frame_buscar = tk.Frame(frame_top, bg="white",
                                 highlightbackground="#D68092",
@@ -256,12 +260,9 @@ class VistaTurnos(tk.Frame):
         self.var_buscar = tk.StringVar()
         self.var_buscar.trace("w", lambda *a: self._filtrar())
 
-        tk.Entry(
-            frame_buscar,
-            textvariable=self.var_buscar,
-            font=("Poppins", 11),
-            bd=0, width=20
-        ).pack(side="left", padx=(8, 4), pady=4)
+        tk.Entry(frame_buscar, textvariable=self.var_buscar,
+                 font=("Poppins", 11), bd=0, width=20
+                 ).pack(side="left", padx=(8, 4), pady=4)
 
         ruta_buscar = os.path.join("assets", "ico_buscar.png")
         self._ico_buscar = self._colorear_icono(ruta_buscar, (214, 128, 146))
@@ -269,14 +270,11 @@ class VistaTurnos(tk.Frame):
             tk.Label(frame_buscar, image=self._ico_buscar,
                      bg="white").pack(side="left", padx=(0, 8))
 
-        tk.Button(
-            frame_top,
-            text="Agregar turno",
-            bg="#D68092", fg="white",
-            font=("Poppins", 11),
-            bd=0, relief="flat", cursor="hand2",
-            command=self._mostrar_formulario_agregar
-        ).pack(side="right", ipady=4, ipadx=10, padx=(0, 10))
+        tk.Button(frame_top, text="Agregar turno",
+                  bg="#D68092", fg="white", font=("Poppins", 11),
+                  bd=0, relief="flat", cursor="hand2",
+                  command=self._mostrar_formulario_agregar
+                  ).pack(side="right", ipady=4, ipadx=10, padx=(0, 10))
 
         tk.Frame(self, bg="#D68092", height=2).pack(
             fill="x", padx=30, pady=(8, 0))
@@ -287,17 +285,12 @@ class VistaTurnos(tk.Frame):
         style = ttk.Style()
         style.theme_use("clam")
         style.configure("Turno.Treeview",
-                        background="white",
-                        foreground="#333333",
-                        rowheight=40,
-                        fieldbackground="white",
-                        font=("Poppins", 10),
-                        borderwidth=0)
+                        background="white", foreground="#333333",
+                        rowheight=40, fieldbackground="white",
+                        font=("Poppins", 10), borderwidth=0)
         style.configure("Turno.Treeview.Heading",
-                        background="#D68092",
-                        foreground="white",
-                        font=("Poppins ExtraBold", 11),
-                        relief="flat")
+                        background="#D68092", foreground="white",
+                        font=("Poppins ExtraBold", 11), relief="flat")
         style.map("Turno.Treeview",
                   background=[("selected", "#FADADD")],
                   foreground=[("selected", "#333333")])
@@ -306,9 +299,8 @@ class VistaTurnos(tk.Frame):
 
         cols = ("dia", "hora", "servicio", "cliente",
                 "empleado", "editar", "visualizar")
-        self.tree = ttk.Treeview(
-            container, columns=cols, show="headings",
-            style="Turno.Treeview", selectmode="browse")
+        self.tree = ttk.Treeview(container, columns=cols, show="headings",
+                                 style="Turno.Treeview", selectmode="browse")
 
         encabezados = {
             "dia": "Día", "hora": "Hora", "servicio": "Servicio(s)",
@@ -326,7 +318,7 @@ class VistaTurnos(tk.Frame):
             self.tree.column(col, anchor="center",
                              width=anchos[col], minwidth=50)
 
-        self.tree.tag_configure("par", background="#FADADD")
+        self.tree.tag_configure("par",   background="#FADADD")
         self.tree.tag_configure("impar", background="white")
 
         scroll_y = ttk.Scrollbar(container, orient="vertical",
@@ -366,7 +358,7 @@ class VistaTurnos(tk.Frame):
         self.tree.delete(*self.tree.get_children())
         self._turnos_cache = turnos
         for i, turno in enumerate(turnos):
-            tag = "par" if i % 2 == 0 else "impar"
+            tag      = "par" if i % 2 == 0 else "impar"
             fecha    = turno["fecha_hora"]
             dia_str  = fecha.strftime("%a. %d %b.") if hasattr(fecha, "strftime") else str(fecha)
             hora_str = fecha.strftime("%H:%M")       if hasattr(fecha, "strftime") else ""
@@ -386,10 +378,8 @@ class VistaTurnos(tk.Frame):
                  bg="#F9F0F2", fg="#D68092",
                  font=("Poppins ExtraBold", 18)
                  ).pack(anchor="w", padx=30, pady=(20, 0))
-
         tk.Frame(self, bg="#D68092", height=2).pack(
             fill="x", padx=30, pady=(6, 10))
-
         tk.Button(self, text="← Volver", bg="#F9F0F2", fg="#D68092",
                   font=("Poppins", 11), bd=0, relief="flat", cursor="hand2",
                   command=self._mostrar_listado
@@ -408,7 +398,8 @@ class VistaTurnos(tk.Frame):
         try:
             img = Image.open(ruta_foto).resize((70, 70), Image.LANCZOS) \
                 if ruta_foto and os.path.exists(ruta_foto) \
-                else Image.open(os.path.join("assets", "user_rosa.png")).resize((70, 70), Image.LANCZOS)
+                else Image.open(os.path.join(
+                    "assets", "user_rosa.png")).resize((70, 70), Image.LANCZOS)
             self._foto_user = ImageTk.PhotoImage(img)
             tk.Label(frame_enc, image=self._foto_user,
                      bg="white").pack(side="left", padx=(0, 15))
@@ -417,7 +408,6 @@ class VistaTurnos(tk.Frame):
 
         frame_nombre_enc = tk.Frame(frame_enc, bg="white")
         frame_nombre_enc.pack(side="left")
-
         tk.Label(frame_nombre_enc, text="Información del turno a cargo de:",
                  bg="white", fg="#999999", font=("Poppins", 12)).pack(anchor="w")
         tk.Label(frame_nombre_enc,
@@ -432,7 +422,7 @@ class VistaTurnos(tk.Frame):
         fecha_str = fecha.strftime("%d/%m/%Y %H:%M") if hasattr(fecha, "strftime") else str(fecha)
         duracion  = turno.get("duracion") or 0
         precio    = float(turno.get("precio_total") or 0)
-        sena      = float(turno.get("sena_pagada") or 0)
+        sena      = float(turno.get("sena_pagada")  or 0)
 
         for etiqueta, valor in [
             ("Nombre del cliente",       f"{turno['cli_nombre']} {turno['cli_apellido']}"),
@@ -496,7 +486,6 @@ class VistaTurnos(tk.Frame):
                   bd=1, relief="solid", cursor="hand2",
                   command=lambda: self._cancelar_turno(turno, popup)
                   ).pack(side="left", ipadx=20, ipady=6, padx=(0, 10))
-
         tk.Button(frame_btns, text="Cancelar", bg="white", fg="#333333",
                   font=("Poppins", 11), bd=1, relief="solid", cursor="hand2",
                   command=popup.destroy
@@ -509,8 +498,9 @@ class VistaTurnos(tk.Frame):
             return
         try:
             cursor = conexion.cursor()
-            cursor.execute("UPDATE turnos SET estado = 'cancelado' WHERE id_turno = %s",
-                           (turno["id_turno"],))
+            cursor.execute(
+                "UPDATE turnos SET estado = 'cancelado' WHERE id_turno = %s",
+                (turno["id_turno"],))
             conexion.commit()
             popup.destroy()
             messagebox.showinfo("Éxito", "Turno cancelado correctamente.")
@@ -527,8 +517,10 @@ class VistaTurnos(tk.Frame):
             return
         try:
             cursor = conexion.cursor()
-            cursor.execute("UPDATE turnos SET total_pagado = 1, sena_pagada = precio_total WHERE id_turno = %s",
-                           (turno["id_turno"],))
+            cursor.execute(
+                "UPDATE turnos SET total_pagado = 1, "
+                "sena_pagada = precio_total WHERE id_turno = %s",
+                (turno["id_turno"],))
             conexion.commit()
             messagebox.showinfo("Éxito", "Turno marcado como pagado.")
             turno["total_pagado"] = 1
@@ -546,8 +538,9 @@ class VistaTurnos(tk.Frame):
             return
         try:
             cursor = conexion.cursor()
-            cursor.execute("UPDATE turnos SET estado = 'completado' WHERE id_turno = %s",
-                           (turno["id_turno"],))
+            cursor.execute(
+                "UPDATE turnos SET estado = 'completado' WHERE id_turno = %s",
+                (turno["id_turno"],))
             conexion.commit()
             messagebox.showinfo("Éxito", "Turno marcado como finalizado.")
             self._mostrar_listado()
@@ -573,10 +566,8 @@ class VistaTurnos(tk.Frame):
         tk.Label(self, text=titulo, bg="#F9F0F2", fg="#D68092",
                  font=("Poppins ExtraBold", 18)
                  ).pack(anchor="w", padx=30, pady=(20, 0))
-
         tk.Frame(self, bg="#D68092", height=2).pack(
             fill="x", padx=30, pady=(6, 10))
-
         tk.Button(self, text="← Volver", bg="#F9F0F2", fg="#D68092",
                   font=("Poppins", 11), bd=0, relief="flat", cursor="hand2",
                   command=self._mostrar_listado
@@ -611,10 +602,8 @@ class VistaTurnos(tk.Frame):
                                      format="%02.0f", font=("Poppins", 11), wrap=True)
         self.spin_hora.set("08")
         self.spin_hora.pack(side="left")
-
         tk.Label(frame_hora, text=":", bg="white",
                  font=("Poppins", 14)).pack(side="left")
-
         self.spin_min = ttk.Spinbox(frame_hora, from_=0, to=59, width=3,
                                     format="%02.0f", font=("Poppins", 11), wrap=True)
         self.spin_min.set("00")
@@ -634,7 +623,6 @@ class VistaTurnos(tk.Frame):
         tk.Label(frame_f2, text="Cliente:*", bg="white", fg="#333333",
                  font=("Poppins", 11)).grid(row=0, column=2, sticky="w", padx=(20, 0))
 
-        # Listbox servicios
         servicios = self._obtener_servicios()
         self.servicios_data = {s["nombre"]: s for s in servicios}
 
@@ -651,15 +639,12 @@ class VistaTurnos(tk.Frame):
         self.listbox_servicios.configure(yscrollcommand=scroll_lb.set)
         self.listbox_servicios.pack(side="left", fill="x", expand=True)
         scroll_lb.pack(side="right", fill="y")
-
-        # al cambiar selección → actualizar empleados Y duración/precio
         self.listbox_servicios.bind("<<ListboxSelect>>",
                                     self._on_servicios_seleccionados)
 
         for nombre in self.servicios_data.keys():
             self.listbox_servicios.insert(tk.END, nombre)
 
-        # Combo empleados
         self._todos_empleados = self._obtener_todos_empleados()
         self.empleados_data = {
             f"{e['nombre']} {e['apellido']}": e["id_empleado"]
@@ -668,25 +653,18 @@ class VistaTurnos(tk.Frame):
 
         self.var_empleado = tk.StringVar()
         self.combo_emp = ttk.Combobox(
-            frame_f2,
-            textvariable=self.var_empleado,
+            frame_f2, textvariable=self.var_empleado,
             values=list(self.empleados_data.keys()),
-            state="readonly",
-            font=("Poppins", 11)
-        )
+            state="readonly", font=("Poppins", 11))
         self.combo_emp.grid(row=1, column=1, sticky="ew",
                             ipady=6, pady=(4, 0), padx=(20, 0))
 
-        # Nota informativa debajo del combo
         self.lbl_empleado_hint = tk.Label(
             frame_f2,
             text="Seleccioná un servicio para filtrar empleados",
-            bg="white", fg="#999999",
-            font=("Poppins", 9)
-        )
+            bg="white", fg="#999999", font=("Poppins", 9))
         self.lbl_empleado_hint.grid(row=2, column=1, sticky="w", padx=(20, 0))
 
-        # Buscador + listbox clientes
         frame_cli = tk.Frame(frame_f2, bg="white")
         frame_cli.grid(row=1, column=2, sticky="ew", pady=(4, 0), padx=(20, 0))
 
@@ -704,13 +682,14 @@ class VistaTurnos(tk.Frame):
         self.listbox_clientes.pack(fill="x")
 
         self.clientes_data = {}
+        self._cliente_a_preseleccionar = None
         self._filtrar_clientes()
 
         frame_f2.columnconfigure(0, weight=1)
         frame_f2.columnconfigure(1, weight=1)
         frame_f2.columnconfigure(2, weight=1)
 
-        # Duración | Seña | Precio 
+        # Duración | Seña | Precio
         frame_f3 = tk.Frame(form, bg="white")
         frame_f3.pack(fill="x", pady=(0, 15))
 
@@ -722,22 +701,26 @@ class VistaTurnos(tk.Frame):
                  fg="#333333", font=("Poppins", 11)).grid(row=0, column=2, sticky="w", padx=(20, 0))
 
         self.entry_duracion = tk.Entry(frame_f3, font=("Poppins", 11),
-                                       bg="#EEEEEE", bd=0, relief="flat", state="readonly")
+                                       bg="#EEEEEE", bd=0, relief="flat",
+                                       state="readonly")
         self.entry_duracion.grid(row=1, column=0, sticky="ew", ipady=8, pady=(4, 0))
 
         self.entry_sena = tk.Entry(frame_f3, font=("Poppins", 11),
                                    bg="#EEEEEE", bd=0, relief="flat")
-        self.entry_sena.grid(row=1, column=1, sticky="ew", ipady=8, pady=(4, 0), padx=(20, 0))
+        self.entry_sena.grid(row=1, column=1, sticky="ew", ipady=8,
+                             pady=(4, 0), padx=(20, 0))
 
         self.entry_precio = tk.Entry(frame_f3, font=("Poppins", 11),
-                                     bg="#EEEEEE", bd=0, relief="flat", state="readonly")
-        self.entry_precio.grid(row=1, column=2, sticky="ew", ipady=8, pady=(4, 0), padx=(20, 0))
+                                     bg="#EEEEEE", bd=0, relief="flat",
+                                     state="readonly")
+        self.entry_precio.grid(row=1, column=2, sticky="ew", ipady=8,
+                               pady=(4, 0), padx=(20, 0))
 
         frame_f3.columnconfigure(0, weight=1)
         frame_f3.columnconfigure(1, weight=1)
         frame_f3.columnconfigure(2, weight=1)
 
-        # Prellenar si es editar 
+        # Prellenar si es editar
         if modo == "editar" and turno:
             fecha = turno["fecha_hora"]
             if hasattr(fecha, "strftime"):
@@ -745,20 +728,34 @@ class VistaTurnos(tk.Frame):
                 self.spin_hora.set(fecha.strftime("%H"))
                 self.spin_min.set(fecha.strftime("%M"))
 
+            ids_servicios_turno = self._obtener_ids_servicios_turno(
+                turno["id_turno"])
+            nombres_lista = list(self.servicios_data.keys())
+            for i, nombre in enumerate(nombres_lista):
+                if self.servicios_data[nombre]["id_servicio"] \
+                        in ids_servicios_turno:
+                    self.listbox_servicios.selection_set(i)
+
+            self._actualizar_duracion_precio()
+            self._actualizar_combo_empleados()
+
             emp_nombre = f"{turno['emp_nombre']} {turno['emp_apellido']}"
             if emp_nombre in self.empleados_data:
                 self.var_empleado.set(emp_nombre)
 
-            self.var_cliente_buscar.set(
-                f"{turno['cli_nombre']} {turno['cli_apellido']}")
+            nombre_cliente = f"{turno['cli_nombre']} {turno['cli_apellido']}"
+            self._cliente_a_preseleccionar = nombre_cliente
+            self.var_cliente_buscar.set(nombre_cliente)
+            self._filtrar_clientes()
+
+            sena_val = turno.get("sena_pagada")
+            if sena_val:
+                self.entry_sena.delete(0, tk.END)
+                self.entry_sena.insert(0, str(float(sena_val)))
 
             self._set_entry_readonly(
-                self.entry_duracion,
-                self._duracion_a_texto(float(turno.get("duracion") or 0)))
-            if turno.get("sena_pagada"):
-                self.entry_sena.insert(0, str(turno["sena_pagada"]))
-            self._set_entry_readonly(
-                self.entry_precio, str(turno.get("precio_total", "")))
+                self.entry_precio,
+                f"{float(turno.get('precio_total', 0)):.2f}")
 
         # Botones
         frame_btns = tk.Frame(tarjeta, bg="white")
@@ -775,22 +772,16 @@ class VistaTurnos(tk.Frame):
                   command=lambda: self._guardar(modo, turno)
                   ).pack(side="left", ipadx=15, ipady=8)
 
-    # LÓGICA DE FILTRO EMPLEADOS
+    # FILTRO EMPLEADOS
 
     def _on_servicios_seleccionados(self, event=None):
-        """Callback al cambiar la selección del listbox de servicios."""
         self._actualizar_duracion_precio()
         self._actualizar_combo_empleados()
 
     def _actualizar_combo_empleados(self):
-        """
-        Filtra el combo de empleados según las especialidades de los
-        servicios seleccionados. Si no hay selección, muestra todos.
-        """
         seleccionados = self.listbox_servicios.curselection()
         nombres_lista = list(self.servicios_data.keys())
 
-        # Recolectar ids de especialidades únicas requeridas
         ids_especialidades = list({
             self.servicios_data[nombres_lista[i]]["id_especialidad"]
             for i in seleccionados
@@ -798,7 +789,6 @@ class VistaTurnos(tk.Frame):
         })
 
         empleados = self._obtener_empleados_por_especialidades(ids_especialidades)
-
         self.empleados_data = {
             f"{e['nombre']} {e['apellido']}": e["id_empleado"]
             for e in empleados
@@ -811,8 +801,7 @@ class VistaTurnos(tk.Frame):
 
         if seleccionados and not nuevos_valores:
             self.lbl_empleado_hint.config(
-                text="No hay empleados con esa especialidad",
-                fg="#D68092")
+                text="No hay empleados con esa especialidad", fg="#D68092")
         elif seleccionados:
             self.lbl_empleado_hint.config(
                 text=f"{len(nuevos_valores)} empleado(s) disponible(s)",
@@ -832,8 +821,10 @@ class VistaTurnos(tk.Frame):
         seleccionados = self.listbox_servicios.curselection()
         nombres = [list(self.servicios_data.keys())[i] for i in seleccionados]
 
-        duracion_total = sum(float(self.servicios_data[n]["duracion"]) for n in nombres)
-        precio_total   = sum(float(self.servicios_data[n]["precio"])   for n in nombres)
+        duracion_total = sum(
+            float(self.servicios_data[n]["duracion"]) for n in nombres)
+        precio_total = sum(
+            float(self.servicios_data[n]["precio"]) for n in nombres)
 
         self._set_entry_readonly(
             self.entry_duracion,
@@ -852,28 +843,44 @@ class VistaTurnos(tk.Frame):
             self.clientes_data[nombre] = c["id_cliente"]
             self.listbox_clientes.insert(tk.END, nombre)
 
+        if hasattr(self, '_cliente_a_preseleccionar') \
+                and self._cliente_a_preseleccionar:
+            items = self.listbox_clientes.get(0, tk.END)
+            for i, item in enumerate(items):
+                if item == self._cliente_a_preseleccionar:
+                    self.listbox_clientes.selection_set(i)
+                    self.listbox_clientes.see(i)
+                    self._cliente_a_preseleccionar = None
+                    break
+
     # GUARDAR
 
     def _guardar(self, modo, turno=None):
         from db.conexion import obtener_conexion, cerrar_conexion
 
         try:
-            fecha     = self.date_entry.get_date()
-            hora      = int(self.spin_hora.get())
-            minuto    = int(self.spin_min.get())
-            fecha_hora = datetime.datetime.combine(fecha, datetime.time(hora, minuto))
+            fecha      = self.date_entry.get_date()
+            hora       = int(self.spin_hora.get())
+            minuto     = int(self.spin_min.get())
+            fecha_hora = datetime.datetime.combine(
+                fecha, datetime.time(hora, minuto))
         except Exception:
             messagebox.showwarning("Atención", "Fecha u hora inválida.")
             return
 
         seleccionados = self.listbox_servicios.curselection()
         if not seleccionados:
-            messagebox.showwarning("Atención", "Seleccioná al menos un servicio.")
+            messagebox.showwarning("Atención",
+                                   "Seleccioná al menos un servicio.")
             return
-        nombres_servicios = [list(self.servicios_data.keys())[i] for i in seleccionados]
-        ids_servicios     = [self.servicios_data[n]["id_servicio"] for n in nombres_servicios]
-        duracion_total    = sum(float(self.servicios_data[n]["duracion"]) for n in nombres_servicios)
-        precio_total      = sum(float(self.servicios_data[n]["precio"])   for n in nombres_servicios)
+        nombres_servicios = [list(self.servicios_data.keys())[i]
+                             for i in seleccionados]
+        ids_servicios  = [self.servicios_data[n]["id_servicio"]
+                          for n in nombres_servicios]
+        duracion_total = sum(float(self.servicios_data[n]["duracion"])
+                             for n in nombres_servicios)
+        precio_total   = sum(float(self.servicios_data[n]["precio"])
+                             for n in nombres_servicios)
 
         emp_nombre = self.var_empleado.get()
         if not emp_nombre:
@@ -885,10 +892,10 @@ class VistaTurnos(tk.Frame):
         if not sel_cli:
             messagebox.showwarning("Atención", "Seleccioná un cliente.")
             return
-        cli_nombre  = self.listbox_clientes.get(sel_cli[0])
-        id_cliente  = self.clientes_data[cli_nombre]
+        cli_nombre = self.listbox_clientes.get(sel_cli[0])
+        id_cliente = self.clientes_data[cli_nombre]
 
-        sena_str   = self.entry_sena.get().strip()
+        sena_str    = self.entry_sena.get().strip()
         sena_pagada = float(sena_str) if sena_str else None
 
         duracion_min = int(duracion_total * 60)
@@ -932,8 +939,8 @@ class VistaTurnos(tk.Frame):
 
             for id_s in ids_servicios:
                 cursor.execute(
-                    "INSERT INTO turno_servicio (id_turno, id_servicio) VALUES (%s, %s)",
-                    (id_turno, id_s))
+                    "INSERT INTO turno_servicio (id_turno, id_servicio) "
+                    "VALUES (%s, %s)", (id_turno, id_s))
 
             conexion.commit()
             messagebox.showinfo("Éxito", "Turno guardado correctamente.")

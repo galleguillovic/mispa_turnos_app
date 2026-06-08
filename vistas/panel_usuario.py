@@ -199,6 +199,7 @@ class PanelUsuario(tk.Toplevel):
         for widget in self.sidebar.winfo_children():
             widget.destroy()
         self._construir_sidebar()
+
         for widget in self.area_contenido.winfo_children():
             widget.destroy()
 

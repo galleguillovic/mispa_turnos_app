@@ -26,6 +26,7 @@ class PanelAdmin(tk.Toplevel):
         self.iconos_blancos = {}
         self.iconos_rosados = {}
         self._cargar_iconos()
+        self._vista_turnos = None
         self._construir_ui()
 
     def _colorear_icono(self, ruta, color_rgb, size=(22, 22)):
@@ -213,7 +214,12 @@ class PanelAdmin(tk.Toplevel):
             self._mostrar_inicio()
         elif texto == "Ver turnos":
             from vistas.turnos import VistaTurnos
-            VistaTurnos(self.area_contenido, self)
+            if self._vista_turnos:
+                try:
+                    self._vista_turnos.destroy()
+                except Exception:
+                    pass
+            self._vista_turnos = VistaTurnos(self.area_contenido, self)
         elif texto == "Ver clientes":
             from vistas.clientes import VistaClientes
             VistaClientes(self.area_contenido, self)
@@ -438,6 +444,7 @@ class PanelAdmin(tk.Toplevel):
         lbl.pack()
 
     def _ver_detalle_turno(self, turno):
+        from vistas.turnos import VistaTurnos
         from db.conexion import obtener_conexion, cerrar_conexion
         conexion = obtener_conexion()
         if not conexion:
@@ -445,15 +452,15 @@ class PanelAdmin(tk.Toplevel):
         try:
             cursor = conexion.cursor(dictionary=True)
             cursor.execute("""
-                SELECT t.id_turno, t.fecha_hora, t.estado, t.precio_total,
-                       t.sena_pagada, t.total_pagado, t.duracion,
-                       t.observaciones,
-                       GROUP_CONCAT(s.nombre SEPARATOR ', ') AS servicios,
-                       p_cli.nombre AS cli_nombre,
-                       p_cli.apellido AS cli_apellido,
-                       p_emp.nombre AS emp_nombre,
-                       p_emp.apellido AS emp_apellido,
-                       u_emp.foto AS emp_foto
+                SELECT  t.id_turno, t.fecha_hora, t.estado, t.precio_total,
+                        t.sena_pagada, t.total_pagado, t.duracion,
+                        t.observaciones,
+                        GROUP_CONCAT(s.nombre SEPARATOR ', ') AS servicios,
+                        p_cli.nombre AS cli_nombre,
+                        p_cli.apellido AS cli_apellido,
+                        p_emp.nombre AS emp_nombre,
+                        p_emp.apellido AS emp_apellido,
+                        u_emp.foto AS emp_foto
                 FROM turnos t
                 LEFT JOIN turno_servicio ts ON t.id_turno = ts.id_turno
                 LEFT JOIN servicios s ON ts.id_servicio = s.id_servicio
@@ -478,9 +485,12 @@ class PanelAdmin(tk.Toplevel):
         for widget in self.area_contenido.winfo_children():
             widget.destroy()
         self.menu_activo = "Ver turnos"
-        from vistas.turnos import VistaTurnos
-        vista = VistaTurnos(self.area_contenido, self)
-        vista._mostrar_detalles(turno_completo)
+        for widget in self.sidebar.winfo_children():
+            widget.destroy()
+        self._construir_sidebar()
+
+        self._vista_turnos = VistaTurnos(self.area_contenido, self, mostrar_listado=False)
+        self._vista_turnos._mostrar_detalles(turno_completo)
 
     def _mostrar_turnos_dia(self, fecha, frame_padre):
         for widget in frame_padre.winfo_children():

@@ -70,7 +70,7 @@ class VistaTurnosUsuario(tk.Frame):
                 JOIN empleados e     ON t.id_empleado  = e.id_empleado
                 JOIN personas  p_emp ON e.id_persona  = p_emp.id_persona
                 JOIN usuarios  u_emp ON e.id_usuario  = u_emp.id_usuario
-                WHERE t.estado != 'cancelado'
+                WHERE t.estado = 'programado'
                   AND e.id_usuario = %s
             """
             params = [self.panel.usuario["id_usuario"]]
